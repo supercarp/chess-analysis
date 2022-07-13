@@ -1,0 +1,173 @@
+-- chess-analysis-sql.txt
+--
+-- author: brian carpenter
+-- last updated: july 2022
+-- posted on github: july 2022, user 'carpocalypto', repository 'chess-analysis'
+
+-- this file contains all the SQL queries I wrote for this project. some are discussed in the readme but many are not
+
+-- replace 'database.chess_dataset.complete_game_data' with your own database
+-- replace "SuperCarp" with the chess.com username from which the data was pulled
+
+----- overall stats query -----
+SELECT
+  COUNT(*) as total_games,
+  SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0)) AS win_count,
+  SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) AS draw_count,
+  ROUND(SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) as draw_pct,
+  MAX(IF(white_player = "SuperCarp" AND result = "1-0", black_elo, null)) AS best_win_as_white,
+  MAX(IF(black_player = "SuperCarp" AND result = "0-1", white_elo, null)) AS best_win_as_black,
+  MAX(game_duration) AS longest_game_time,
+  MAX(game_length_moves) AS longest_game_moves
+FROM `database.chess_dataset.complete_game_data`
+
+----- elo over time, for use in creating a line graph of performance -----
+SELECT
+  game_date,
+  IF(white_player = "SuperCarp", white_elo, black_elo) as my_elo
+FROM `database.chess_dataset.complete_game_data`
+  ORDER BY game_date ASC
+
+----- day of the week stats -----
+SELECT
+  game_day_of_week,
+  COUNT(*) AS game_count,
+  SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0)) AS win_count,
+  SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) as draw_count,
+  ROUND(SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+  GROUP BY game_day_of_week
+  ORDER BY
+    (CASE WHEN game_day_of_week = "Monday" THEN 1
+    WHEN game_day_of_week = "Tuesday" THEN 2
+    WHEN game_day_of_week = "Wednesday" THEN 3
+    WHEN game_day_of_week = "Thursday" THEN 4
+    WHEN game_day_of_week = "Friday" THEN 5
+    WHEN game_day_of_week = "Saturday" THEN 6
+    ELSE 7
+    END)
+
+----- time difference stats -----
+SELECT
+  COUNT(*) as total_games,
+  -- time differences for move 10
+  /*SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-", 1, 0)) AS positive_time_diff_move_ten,
+  SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)) AS negative_time_diff_move_ten,*/
+  -- percentage for move 10
+  ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)))*100,1)
+    AS move_ten_negative_time_pct,
+  --
+  -- time differences for move 15
+  /*SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-", 1, 0)) AS positive_time_diff_move_fifteen,
+  SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)) AS negative_time_diff_move_fifteen,*/
+  -- percentage for move 15
+  ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)))*100,1)
+    AS move_fifteen_negative_time_pct,  
+  --
+  -- time differences for move 20
+  /*SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-", 1, 0)) AS positive_time_diff_move_twenty,
+  SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)) AS negative_time_diff_move_twenty,*/
+  -- percentage for move 20
+  ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)))*100,1)
+    AS move_twenty_negative_time_pct,  
+  --
+  -- time differences for move 30
+  SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-", 1, 0)) AS positive_time_diff_move_thirty,
+  SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)) AS negative_time_diff_move_thirty,
+  -- percentage for move 30
+  ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)))*100,1)
+    AS move_thirty_negative_time_pct,
+  --
+FROM `database.chess_dataset.complete_game_data`
+
+----- first four move stats compilation -----
+SELECT
+    first_four_moves,
+    COUNT(*) AS game_count,
+    SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0)) AS win_count,
+    SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0)) AS loss_count,
+    SUM(IF(result = "draw", 1, 0)) AS draw_count,
+    ROUND(SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+    ROUND(SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+    ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+    GROUP BY first_four_moves
+    ORDER BY game_count DESC
+
+----- my performance as white when playing d4, vs black opening moves -----
+SELECT
+  white_first_move,
+  black_first_move,
+  COUNT(*) AS game_count,
+  SUM(IF(result = "1-0", 1, 0)) AS win_count,
+  SUM(IF(result = "0-1", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) AS draw_count,
+  ROUND(SUM(IF(result = "1-0", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(result = "0-1", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+WHERE white_player = "SuperCarp" AND white_first_move = "d4"
+    GROUP BY white_first_move, black_first_move
+    ORDER BY game_count DESC
+
+----- my performance as white when playing e4, vs black opening moves -----
+SELECT
+  white_first_move,
+  black_first_move,
+  COUNT(*) AS game_count,
+  SUM(IF(result = "1-0", 1, 0)) AS win_count,
+  SUM(IF(result = "0-1", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) AS draw_count,
+  ROUND(SUM(IF(result = "1-0", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(result = "0-1", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+WHERE white_player = "SuperCarp" AND white_first_move = "e4"
+    GROUP BY white_first_move, black_first_move
+    ORDER BY game_count DESC
+
+----- my performance as black vs white's opening move d4 -----
+SELECT
+  white_first_move,
+  black_first_move,
+  COUNT(*) AS game_count,
+  SUM(IF(result = "0-1", 1, 0)) AS win_count,
+  SUM(IF(result = "1-0", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) AS draw_count,
+  ROUND(SUM(IF(result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+WHERE black_player = "SuperCarp" AND white_first_move = "d4"
+    GROUP BY white_first_move, black_first_move
+    ORDER BY game_count DESC
+
+----- my performance as black vs white's opening move e4 -----
+SELECT
+  white_first_move,
+  black_first_move,
+  COUNT(*) AS game_count,
+  SUM(IF(result = "0-1", 1, 0)) AS win_count,
+  SUM(IF(result = "1-0", 1, 0)) AS loss_count,
+  SUM(IF(result = "draw", 1, 0)) AS draw_count,
+  ROUND(SUM(IF(result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+  ROUND(SUM(IF(result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+  ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+FROM `database.chess_dataset.complete_game_data`
+WHERE black_player = "SuperCarp" AND white_first_move = "e4"
+    GROUP BY white_first_move, black_first_move
+    ORDER BY game_count DESC
