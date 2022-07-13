@@ -8,7 +8,7 @@ With this project I set out to achieve four goals:
 4) Use Tableau Public to create a visualization of the data and insights
 
 ## Pulling the data efficiently using R
-The initial challenge was that chess game data is stored in plaintext .pgn files, which have to be manually downloaded per game from chess.com. However, chess.com offers a developer API to access information about players and games on the platform including a list of a player's monthly archived games and consolidated monthly .pgn files with every game included. Link to the chess.com API overview: https://www.chess.com/news/view/published-data-api
+The initial challenge was that chess game data is stored in plaintext .pgn files which have to be manually downloaded per game from chess.com. However, chess.com offers a developer API to access information about players and games on the platform including a list of a player's monthly archived games, and consolidated monthly .pgn files with every game included. Link to the chess.com API overview: https://www.chess.com/news/view/published-data-api
 
 Initially I downloaded a single .pgn file and read it into an R dataframe. I then pulled only relevant data to my analysis from the dataframe. Example:
 
