@@ -64,7 +64,7 @@ The link returns a large plaintext file containing all the .pgn data for that mo
 
 The resulting data in all_pgn_list was a list of length 39, each item in the list containing three dataframes - one unnamed dataframe containing most of the game info (including the .pgn plaintext) as well as one dataframe each for the white and black player:
 
-<img width="762" alt="Screen Shot 2022-07-13 at 10 34 53 AM" src="https://user-images.githubusercontent.com/109003416/178760048-e6eca49c-260f-411e-b5fb-08d0452b308c.png">
+<img width="762" alt="dataframe" src="https://user-images.githubusercontent.com/109003416/178760048-e6eca49c-260f-411e-b5fb-08d0452b308c.png">
 
 To ensure the subsequent code would pull the right list/dataframe item, I ran a few checks:
 
@@ -74,7 +74,7 @@ To ensure the subsequent code would pull the right list/dataframe item, I ran a 
 
 I then imported the .csv into Google Sheets and using "split text to columns" on the delimeter "]" I had one game per row:
 
-<img width="852" alt="Screen Shot 2022-07-13 at 10 45 01 AM" src="https://user-images.githubusercontent.com/109003416/178762427-4899b746-5141-4f1a-a513-87dc7d274a4d.png">
+<img width="852" alt="Google Sheets" src="https://user-images.githubusercontent.com/109003416/178762427-4899b746-5141-4f1a-a513-87dc7d274a4d.png">
 
 Finally, I put it all together:
 
@@ -99,9 +99,141 @@ Finally, I put it all together:
 
 I then imported the .csv file into Google Sheets to begin work on goal #2.
 
-## Use Google Sheets to process, clean, and organize the data
+## Use Google Sheets to process, clean, and initially analyze the data
 
-Find/replace
-Delete columns
-Create new columns - time difference, result reason, game length moves, first four moves, day of the week
-IFERROR statements
+I did the initial data cleaning with a series of Find & Replace actions, replacing unneeded information with blank spaces. I then deleted several columns that weren't relevant such as Round, Timezone, and the URL of the individual game.
+
+I soon realized I would need to create several new columns. For instance, the data for the 10th move of a game looked like this:
+
+    10. Nd2 {[%clk 0:15:20]} 10... h6 {[%clk 0:13:27.1]}
+
+Parsed out, the information contained is:
+    
+    10. = indicates start of the 10th move
+    Nd2 = white's move
+    {[clk 0:15:20]} = white's remaining time on the clock
+    10... indicates black's turn on move 10
+    h6 = black's move
+    {[clk 0:13:27.1]} = black's remaining time on the clock, note that tenths of a second are included
+    
+My time management in games is one area I specifically wanted to look at, so I created columns extracting the time data for each player using formulas:
+
+    =IFERROR(IF(AA2>10, RIGHT(AW2, 7)-RIGHT(AX2, 7), "Game Ended"), "Game Ended")
+
+Generically:
+
+    =IFERROR(IF(game_number_of_moves>10, RIGHT(white_move_10, 7)-RIGHT(black_move_10, 7), "Game Ended"), "Game Ended")    
+    
+This allowed me to format the result as a 'Duration' with an easy indicator of how the game was going - a positive duration indicates white has more time remaining, a negative duration indicates black has more.
+
+Other new columns I created included the game length by number of moves, the day of the week of the game, and a result reason (i.e. 1-0 indicates white won, but was it through checkmate, resignation, time expiring, abandonment, or disconnec?).
+
+Of particular interest was the sequence of the first four moves of the game, which I thought might provide insight on how I perform with various openings. I used regular expressions to extract only the first four moves in a simple format:
+
+    =IFERROR(CONCATENATE(REGEXEXTRACT(white_move_1,".+? (.+?) ")," ",REGEXEXTRACT(black_move_1,".+? (.+?) ")," ",REGEXEXTRACT(white_move_2,".+? (.+?) ")," ",REGEXEXTRACT(black_move_2,".+? (.+?) ")),)
+    # this returns:
+    e4 e5 Nf3 Nf6
+
+At this point I had enough actionable data to query and aggregate with SQL.
+
+## Use SQL to discover insights about my chess games
+
+I began to query the data, starting with my performance by day of the week:
+
+    SELECT
+        game_day_of_week,
+        COUNT(*) AS game_count,
+        SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0)) AS win_count,
+        SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0)) AS loss_count,
+        SUM(IF(result = "draw", 1, 0)) as draw_count,
+        ROUND(SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+        ROUND(SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+        ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+    FROM `database.chess_dataset.complete_game_data`
+        GROUP BY game_day_of_week
+    ORDER BY
+      (CASE WHEN game_day_of_week = "Monday" THEN 1
+      WHEN game_day_of_week = "Tuesday" THEN 2
+      WHEN game_day_of_week = "Wednesday" THEN 3
+      WHEN game_day_of_week = "Thursday" THEN 4
+      WHEN game_day_of_week = "Friday" THEN 5
+      WHEN game_day_of_week = "Saturday" THEN 6
+      ELSE 7
+      END)
+ 
+ And the result:
+ 
+ <img width="730" alt="Day of the Week" src="https://user-images.githubusercontent.com/109003416/178789742-1bf4fede-2e41-4381-82f4-a56dcd7b8391.png">
+
+Without going into too much detail here, from this type of query I was able to gain insights such as strong performances Tuesday - Friday but with a significant drop on Thursday. I expected my weekend performance to be good but Saturday and Sunday had high loss percentages.
+
+The query below proved that time management was a substantial problem in most of my games:
+
+    SELECT
+    COUNT(*) as total_games,
+    -- time differences for move 10
+     SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-", 1, 0)) AS positive_time_diff_move_ten,
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)) AS negative_time_diff_move_ten,
+    -- percentage for move 10
+     ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_ten,1) != "-", 1, 0)))*100,1)
+    AS move_ten_negative_time_pct,
+    --
+    -- time differences for move 15
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-", 1, 0)) AS positive_time_diff_move_fifteen,
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)) AS negative_time_diff_move_fifteen,
+    -- percentage for move 15
+    ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_fifteen,1) != "-", 1, 0)))*100,1)
+    AS move_fifteen_negative_time_pct,  
+    --
+    -- time differences for move 20
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-", 1, 0)) AS positive_time_diff_move_twenty,
+     SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)) AS negative_time_diff_move_twenty,
+    -- percentage for move 20
+    ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_twenty,1) != "-", 1, 0)))*100,1)
+    AS move_twenty_negative_time_pct,  
+    --
+    -- time differences for move 30
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-", 1, 0)) AS positive_time_diff_move_thirty,
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)) AS negative_time_diff_move_thirty,
+    -- percentage for move 30
+    ROUND(SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)) / 
+    (SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-", 1, 0)) +
+    SUM(IF(white_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) = "-" OR black_player = "SuperCarp" AND LEFT(time_diff_move_thirty,1) != "-", 1, 0)))*100,1)
+    AS move_thirty_negative_time_pct,
+    --
+    FROM `database.chess_dataset.complete_game_data`
+    
+The below results show that I am behind on the clock by move 10 in most of my games and I never recover:
+
+<img width="718" alt="Time Differences" src="https://user-images.githubusercontent.com/109003416/178791006-0bf4e96d-de01-4f53-9bfa-56d13608897c.png">
+
+One final example of my SQL work I would like to show uses the "first four moves" idea and finds my win/loss/draw percentage based on just the first four moves. Here is the query and results:
+
+    SELECT
+        first_four_moves,
+        COUNT(*) AS game_count,
+        SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0)) AS win_count,
+        SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0)) AS loss_count,
+        SUM(IF(result = "draw", 1, 0)) AS draw_count,
+        ROUND(SUM(IF(white_player = "SuperCarp" AND result = "1-0" OR black_player = "SuperCarp" AND result = "0-1", 1, 0))/COUNT(*)*100,1) AS win_pct,
+        ROUND(SUM(IF(white_player = "SuperCarp" AND result = "0-1" OR black_player = "SuperCarp" AND result = "1-0", 1, 0))/COUNT(*)*100,1) AS loss_pct,
+        ROUND(SUM(IF(result = "draw", 1, 0))/COUNT(*)*100,1) AS draw_pct,
+    FROM `database.chess_dataset.complete_game_data`
+    GROUP BY first_four_moves
+    ORDER BY game_count DESC
+    
+<img width="718" alt="Openings" src="https://user-images.githubusercontent.com/109003416/178791612-7cd3501f-b893-4b19-b952-8c5c4c4bd9d0.png">
+
+I have only included the results for those openings that appear at in at least 15 games (of my 900+ total). There are some obvious points of emphasis - a 60 percent loss rate for a few of the openings! The first four sequences listed comprise 30 percent of my total games. I have a 50 percent or better win rate on only three opening sequences.
+
+With a host of insightful queries, my final step was to visualize the data.
+
+# Visualize the data with Tableau Public
+
+Link to viz
