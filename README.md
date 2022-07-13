@@ -209,7 +209,7 @@ The query below proved that time management was a substantial problem in most of
     --
     FROM `database.chess_dataset.complete_game_data`
     
-The below results show that I am behind on the clock by move 10 in most of my games and I never recover:
+The results show that I am behind on the clock by move 10 in most of my games and I never recover:
 
 <img width="718" alt="Time Differences" src="https://user-images.githubusercontent.com/109003416/178791006-0bf4e96d-de01-4f53-9bfa-56d13608897c.png">
 
@@ -236,4 +236,6 @@ With a host of insightful queries, my final step was to visualize the data.
 
 # Visualize the data with Tableau Public
 
-Link to viz
+I created a visualization appropriately titled "I Suck at Chess," the link is here: https://public.tableau.com/app/profile/brian.carpenter8228/viz/ISuckatChess/Dashboard2#1
+
+I have posted files with the R code and SQL queries into the project.
