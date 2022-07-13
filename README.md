@@ -234,7 +234,7 @@ I have only included the results for those openings that appear at in at least 1
 
 With a host of insightful queries, my final step was to visualize the data.
 
-# Visualize the data with Tableau Public
+## Visualize the data with Tableau Public
 
 I created a visualization appropriately titled "I Suck at Chess," the link is here: https://public.tableau.com/app/profile/brian.carpenter8228/viz/ISuckatChess/Dashboard2#1
 
