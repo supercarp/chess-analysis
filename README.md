@@ -1,5 +1,5 @@
 # chess-analysis
-A collection of code and queries used to analyze my online chess games
+##### *A collection of code and queries used to analyze my online chess games*
 
 With this project I set out to achieve four goals:
 1) Discover how to efficiently pull the data from all of my online chess games (more than 900 total) using R coding
