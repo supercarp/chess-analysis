@@ -128,7 +128,7 @@ Generically:
     
 This allowed me to format the result as a 'Duration' with an easy indicator of how the game was going - a positive duration indicates white has more time remaining, a negative duration indicates black has more.
 
-Other new columns I created included the game length by number of moves, the day of the week of the game, and a result reason (i.e. 1-0 indicates white won, but was it through checkmate, resignation, time expiring, abandonment, or disconnec?).
+Other new columns I created included the game length by number of moves, the day of the week of the game, and a result reason (i.e. 1-0 indicates white won, but was it through checkmate, resignation, time expiring, abandonment, or disconnect?).
 
 Of particular interest was the sequence of the first four moves of the game, which I thought might provide insight on how I perform with various openings. I used regular expressions to extract only the first four moves in a simple format:
 
